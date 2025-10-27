@@ -8,6 +8,7 @@ class Game
 private:
 	bool running{ false };
 	int32_t width{ 1280 }, height{ 720 };
+	float deltaTime;
 	SDL_Window* window;
 	SDL_Renderer* renderer;
 	std::vector<Asteroid> asteroids;

@@ -1,7 +1,8 @@
 #include "Game.h"
+#include <iostream>
 
 Game::Game() {
-	if (!SDL_CreateWindowAndRenderer("Dod Project", width, height, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+	if (!SDL_CreateWindowAndRenderer("Dod Project", width, height, 0, &window, &renderer)) {
 		SDL_Log(SDL_GetError());
 	}
 
@@ -17,10 +18,30 @@ void Game::Destroy() {
 }
 
 void Game::RunLoop() {
-	SpawnAsteroid(width / 2, height / 2, 50);
+	Uint64 Current{ SDL_GetPerformanceCounter() }, Last;
+
+	SDL_Event currentEvent;
+
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
+	SpawnAsteroid(width / 2, height / 2, 100);
 
 	while (running) {
-		SDL_Event currentEvent;
+		Last = Current;
+		Current = SDL_GetPerformanceCounter();
+		
+		deltaTime = (float)((float)(Current - Last) / SDL_GetPerformanceFrequency());
+
 		while (SDL_PollEvent(&currentEvent)) {
 			if (currentEvent.type == SDL_EVENT_QUIT)
 			{
@@ -28,19 +49,20 @@ void Game::RunLoop() {
 				running = false;
 			}
 		}
-
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(renderer);
-		
-		for (const Asteroid& asteroid : asteroids) {
-			asteroid.Draw(renderer);
-		}
-		SDL_RenderPresent(renderer);
+		Update();
 	}
 }
 
 void Game::Update() {
-	//Work in progress
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear(renderer);
+
+	for (Asteroid& asteroid : asteroids) {
+		asteroid.Move(deltaTime);
+		asteroid.Draw(renderer);
+		asteroid.BorderCollision();
+	}
+	SDL_RenderPresent(renderer);
 }
 
 void Game::SpawnAsteroid(float xc, float yc, float r) {
