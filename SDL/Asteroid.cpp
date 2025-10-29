@@ -1,19 +1,16 @@
 #include "Asteroid.h"
-#include <iostream>
 
 Asteroid::Asteroid(float xc, float yc, float r) {
-	center = Vec2(xc, yc);
-
 	this->r = r;
+	cx = xc;
+	cy = yc;
 
-	speed = 100.f;
+	speed = 300.f;
 	
 	angle = 360 * SDL_randf();
 
-	float dirx = SDL_cos(angle);
-	float diry = SDL_sin(angle);
-
-	direction = Vec2(dirx * speed, diry * speed);
+	dx = SDL_cos(angle) * speed;
+	dy = SDL_sin(angle) * speed;
 }
 
 void Asteroid::Draw(SDL_Renderer* renderer) {
@@ -23,14 +20,14 @@ void Asteroid::Draw(SDL_Renderer* renderer) {
 	float y = 0;
 	
 	while (x >= y) {
-		SDL_RenderPoint(renderer, center.x + x, center.y + y);
-		SDL_RenderPoint(renderer, center.x + x, center.y - y);
-		SDL_RenderPoint(renderer, center.x - x, center.y + y);
-		SDL_RenderPoint(renderer, center.x - x, center.y - y);
-		SDL_RenderPoint(renderer, center.x + y, center.y + x);
-		SDL_RenderPoint(renderer, center.x + y, center.y - x);
-		SDL_RenderPoint(renderer, center.x - y, center.y + x);
-		SDL_RenderPoint(renderer, center.x - y, center.y - x);
+		SDL_RenderPoint(renderer, cx + x, cy + y);
+		SDL_RenderPoint(renderer, cx + x, cy - y);
+		SDL_RenderPoint(renderer, cx - x, cy + y);
+		SDL_RenderPoint(renderer, cx - x, cy - y);
+		SDL_RenderPoint(renderer, cx + y, cy + x);
+		SDL_RenderPoint(renderer, cx + y, cy - x);
+		SDL_RenderPoint(renderer, cx - y, cy + x);
+		SDL_RenderPoint(renderer, cx - y, cy - x);
 
 		y++;
 		float xMid = x - 0.5f;
@@ -41,15 +38,20 @@ void Asteroid::Draw(SDL_Renderer* renderer) {
 }
 
 void Asteroid::Move(float delta) {
-	center.Addvf2(direction.Multiplyf(delta));
+	cx += dx * delta;
+	cy += dy * delta;
 }
 
 void Asteroid::BorderCollision() {
-	if (center.x + r >= 1280 || center.x - r <= 0) {
-		direction.x = -direction.x;
+	if (cx + r >= 1280 || cx - r <= 0) {
+		dx = -dx;
 	}
 
-	if (center.y + r >= 720 || center.y - r <= 0) {
-		direction.y = -direction.y;
+	if (cy + r >= 720 || cy - r <= 0) {
+		dy = -dy;
 	}
+
+	cx = SDL_clamp(cx, r, 1280 - r);
+	cy = SDL_clamp(cy, r, 720 - r);
+
 }

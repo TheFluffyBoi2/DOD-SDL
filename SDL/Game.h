@@ -12,6 +12,7 @@ private:
 	SDL_Window* window;
 	SDL_Renderer* renderer;
 	std::vector<Asteroid> asteroids;
+	std::vector<std::pair<int, int>> overlapAsteroids;
 
 public:
 	Game();
@@ -19,4 +20,5 @@ public:
 	void RunLoop();
 	void Update();
 	void SpawnAsteroid(float xc, float yc, float r);
+	void ResolveCollision();
 };
