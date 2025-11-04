@@ -1,14 +1,28 @@
 #include "Game.h"
-#include <iostream>
 
 Game::Game() {
-	if (!SDL_CreateWindowAndRenderer("Dod Project", width, height, 0, &window, &renderer)) {
+	if (!SDL_CreateWindowAndRenderer("Dod Project", 1280, 720, 0, &window, &renderer)) {
 		SDL_Log(SDL_GetError());
 	}
 
 	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(renderer);
 	SDL_RenderPresent(renderer);
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	io = ImGui::GetIO(); (void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+	ImGui::StyleColorsDark();
+	
+	ImGuiStyle& style = ImGui::GetStyle();
+	style.ScaleAllSizes(1);
+	style.FontScaleDpi = 1;
+
+	ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
+	ImGui_ImplSDLRenderer3_Init(renderer);
 
 	deltaTime = 0;
 	running = true;
@@ -20,32 +34,62 @@ void Game::Destroy() {
 
 void Game::RunLoop() {
 	Uint64 Current{ SDL_GetPerformanceCounter() }, Last;
+	bool showDemoWindow = 1;
 
 	SDL_Event currentEvent;
 
-	SpawnAsteroid(width / 2, height / 2, 10);
-	SpawnAsteroid(width / 3, height / 3, 20);
-	SpawnAsteroid(width / 4, height / 4, 50);
-	SpawnAsteroid(width / 5, height / 4, 60);
-	SpawnAsteroid(width / 6, height / 4, 70);
-	SpawnAsteroid(width / 7, height / 4, 80);
+	SpawnAsteroid(1280 / 2, 720 / 2, 10);
 
 	while (running) {
 		Last = Current;
 		Current = SDL_GetPerformanceCounter();
 		
 		deltaTime = (float)((float)(Current - Last) / SDL_GetPerformanceFrequency());
-		std::cout << 1 / deltaTime << '\n';
 
 		while (SDL_PollEvent(&currentEvent)) {
+			ImGui_ImplSDL3_ProcessEvent(&currentEvent);
 			if (currentEvent.type == SDL_EVENT_QUIT)
 			{
 				SDL_Log("Closed the window");
 				running = false;
 			}
 		}
+
+		ImGui_ImplSDLRenderer3_NewFrame();
+		ImGui_ImplSDL3_NewFrame();
+		ImGui::NewFrame();
+
+		{
+			static int spawnedAsteroids = 0;
+			static int erasedAsteroids = 0;
+			static int counter = 0;
+			static int radius = 1;
+
+			ImGui::Begin("Debug window");
+
+			ImGui::SliderInt("Radius", &radius, 1, 50);
+			ImGui::SliderInt("Asteroids", &spawnedAsteroids, 1, 50000 - asteroids.size());
+			ImGui::SliderInt("Erase Count", &erasedAsteroids, 1, asteroids.size());
+
+			if (ImGui::Button("Spawn")) {
+				for (int i = 0; i < spawnedAsteroids; ++i)
+					SpawnAsteroid(1280 / 2, 720 / 2, radius);
+			}
+
+			if (ImGui::Button("Erase")) {
+				if (!asteroids.empty()) {
+					int eraseCount = std::min(erasedAsteroids, (int)asteroids.size());
+					asteroids.erase(asteroids.begin(), asteroids.begin() + eraseCount);
+				}
+			}
+
+			ImGui::Text("Application average %.1f FPS", 1 / deltaTime);
+			ImGui::End();
+		}
 		Update();
 	}
+
+	End();
 }
 
 void Game::ResolveCollision() {
@@ -60,12 +104,20 @@ void Game::ResolveCollision() {
 					(asteroids[i].r + asteroids[j].r)) {
 					float distance = SDL_sqrtf((asteroids[i].cx - asteroids[j].cx) * (asteroids[i].cx - asteroids[j].cx) +
 						(asteroids[i].cy - asteroids[j].cy) * (asteroids[i].cy - asteroids[j].cy));
-					if (distance == 0)
-						distance = 0.01f;
-					float overlap = 0.5f * (distance - asteroids[i].r - asteroids[j].r);
+					
+					float nx, ny;
 
-					float nx = (asteroids[i].cx - asteroids[j].cx) / distance;
-					float ny = (asteroids[i].cy - asteroids[j].cy) / distance;
+					if (distance == 0) {
+						distance = 0.1f;
+						nx = 1.0f;
+						ny = 0.0f;
+					}
+					else {
+						nx = (asteroids[i].cx - asteroids[j].cx) / distance;
+						ny = (asteroids[i].cy - asteroids[j].cy) / distance;
+					}
+
+;					float overlap = 0.5f * (distance - asteroids[i].r - asteroids[j].r);
 
 					asteroids[i].cx -= overlap * nx;
 					asteroids[i].cy -= overlap * ny;
@@ -96,20 +148,32 @@ void Game::ResolveCollision() {
 }
 
 void Game::Update() {
-	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(renderer);
-
 	ResolveCollision();
 	for (Asteroid& asteroid : asteroids) {
 		asteroid.Move(deltaTime);
 		asteroid.Draw(renderer);
 		asteroid.BorderCollision();
 	}
+
+	ImGui::Render();
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+	ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
 	SDL_RenderPresent(renderer);
 }
-
+ 
 
 void Game::SpawnAsteroid(float xc, float yc, float r) {
 	Asteroid asteroid(xc, yc, r);
 	asteroids.push_back(asteroid);
+}
+
+void Game::End() {
+	ImGui_ImplSDLRenderer3_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
+	ImGui::DestroyContext();
+
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
 }
