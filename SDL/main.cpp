@@ -4,6 +4,6 @@
 int main(int argc, char* argv[]) {
 	Game game;
 	game.RunLoop();
-	game.Destroy();
+	game.Destroy(); 
 	return 0;
 }
