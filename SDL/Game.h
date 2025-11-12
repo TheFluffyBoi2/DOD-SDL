@@ -10,13 +10,13 @@
 class Game
 {
 private:
-	bool running{ false };
-	float deltaTime;
-	SDL_Window* window;
-	SDL_Renderer* renderer;
-	ImGuiIO io;
-	std::vector<Asteroid> asteroids;
-	std::vector<std::pair<int, int>> overlapAsteroids;
+	bool								running{ false };
+	float								deltaTime;
+	SDL_Window*							window;
+	SDL_Renderer*						renderer;
+	ImGuiIO								io;
+	std::vector<Asteroid>				asteroids;
+	std::vector<std::pair<int, int>>	overlapAsteroids;
 
 public:
 	Game();
