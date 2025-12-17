@@ -10,4 +10,6 @@ namespace Constants {
 	constexpr int GRID_LINE_SIZE = 25'664;
 	constexpr int CELL_WIDTH = 20;
 	constexpr int ADJOINED_CELL_SIZE = 3'600;
+	constexpr int MAX_CELL_X = 63;
+	constexpr int MAX_CELL_Y = 35;
 }
