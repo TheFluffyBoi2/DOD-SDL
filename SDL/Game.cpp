@@ -161,7 +161,6 @@ void Game::Update() {
 	ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
 	SDL_RenderPresent(renderer);
 }
- 
 
 void Game::SpawnAsteroid(float xc, float yc, float r) {
 	Asteroid asteroid(xc, yc, r);
