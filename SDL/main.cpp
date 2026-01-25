@@ -617,8 +617,6 @@ int main(int argc, char* argv[]) {
 
 			SDL_RenderGeometry(renderer, circleTexture, vertices, index * 4, indices, index * 6);
 
-			//for (int i = 0; i < index; ++i)
-
 			SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 			ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
 			SDL_RenderPresent(renderer);
@@ -630,6 +628,9 @@ int main(int argc, char* argv[]) {
 		delete[] velocities;
 		delete[] gridSlice;
 		delete[] grid;
+		delete[] collisions;
+		delete[] vertices;
+		delete[] indices;
 		break;
 	}
 
