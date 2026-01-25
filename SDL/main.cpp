@@ -2,8 +2,10 @@
 #include <box2d/box2d.h>
 #include <box2d/collision.h>
 
+#include <vector>
 #include <array>
 #include <iostream>
+#include <omp.h>
 
 #include "Constants.hpp"
 #include "Game.h"
@@ -19,7 +21,7 @@ struct vec2i {
 	int y;
 };
 
-void Draw(SDL_Renderer* renderer, vec2f center, float& radius) {
+void Draw(SDL_Renderer* renderer, vec2f center, float radius) {
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 
 	float x = radius;
@@ -97,6 +99,73 @@ float rsqrt(float number) {
 	return y;
 }
 
+void AddCollision(std::vector<vec2i>& collisions, int grid[], int startPos, vec2f centers[], float radiuses[]) {
+	int lastIndex = grid[startPos];
+
+	for (int i = startPos + 1; i < lastIndex; i++) {
+		for (int j = i + 1; j < lastIndex; j++) {
+			int first_index = grid[i];
+			int second_index = grid[j];
+			if (first_index < second_index) {
+				if ((centers[first_index].x - centers[second_index].x) *
+					(centers[first_index].x - centers[second_index].x) +
+					(centers[first_index].y - centers[second_index].y) *
+					(centers[first_index].y - centers[second_index].y) <=
+					(radiuses[first_index] + radiuses[second_index]) *
+					(radiuses[first_index] + radiuses[second_index]))
+					#pragma omp critical
+					collisions.push_back({ first_index, second_index });
+			}
+		}
+	}
+}
+
+void ResolveCollision(std::vector<vec2i>& collisions, vec2f centers[], float radiuses[], vec2f velocities[]) {
+	for (int i = 0; i < collisions.size(); i++) {
+		int first_index = collisions[i].x;
+		int second_index = collisions[i].y;
+
+		float dx = centers[first_index].x - centers[second_index].x;
+		float dy = centers[first_index].y - centers[second_index].y;
+		float dist2 = dx * dx + dy * dy;
+
+		float nx, ny;
+		float distance;
+
+		if (dist2 == 0.0f) {
+			distance = 0.1f;
+			nx = 1.0f;
+			ny = 0.0f;
+		} else {
+			float reverse_dist = rsqrt(dist2);
+			distance = dist2 * reverse_dist;
+			nx = (centers[first_index].x - centers[second_index].x) *
+				reverse_dist;
+			ny = (centers[first_index].y - centers[second_index].y) *
+				reverse_dist;
+		}
+
+		float overlap = 0.5f * (distance - radiuses[first_index] -
+			radiuses[second_index]);
+
+		centers[first_index].x -= overlap * nx;
+		centers[first_index].y -= overlap * ny;
+
+		centers[second_index].x += overlap * nx;
+		centers[second_index].y += overlap * ny;
+		
+		float dpNorm1 =
+			velocities[first_index].x * nx + velocities[first_index].y * ny;
+		float dpNorm2 =
+			velocities[second_index].x * nx + velocities[second_index].y * ny;
+
+		velocities[first_index].x += (dpNorm2 - dpNorm1) * nx;
+		velocities[first_index].y += (dpNorm2 - dpNorm1) * ny;
+		velocities[second_index].x -= (dpNorm2 - dpNorm1) * nx;
+		velocities[second_index].y -= (dpNorm2 - dpNorm1) * ny;
+	}
+}
+
 void ResolveCollision(int grid[], int startPos, vec2f centers[],
 	vec2f velocities[], float radiuses[]) {
 	int lastIndex = grid[startPos];
@@ -105,7 +174,7 @@ void ResolveCollision(int grid[], int startPos, vec2f centers[],
 		for (int j = i + 1; j < lastIndex; j++) {
 			int first_index = grid[i];
 			int second_index = grid[j];
-			if (first_index != second_index) {
+			if (first_index < second_index) {
 				if ((centers[first_index].x - centers[second_index].x) *
 					(centers[first_index].x - centers[second_index].x) +
 					(centers[first_index].y - centers[second_index].y) *
@@ -179,77 +248,6 @@ void ResolveCollision(int grid[], int startPos, vec2f centers[],
 	}
 }
 
-// void ResolveCollision(int index, std::pair<float, float> centers[],
-// std::pair<float, float> velocities[], float radiuses[]) { 	for (int i = 0;
-// i <
-// index; i++) { 		for (int j = i + 1; j < index; j++) {
-// if (i != j) { 				if
-//((centers[i].first - centers[j].first) *
-//(centers[i].first - centers[j].first)
-//+ 					(centers[i].second - centers[j].second)
-//* 					(centers[i].second - centers[j].second)
-// <= 					(radiuses[i] + radiuses[j]) *
-// (radiuses[i] + radiuses[j])) { 					float
-// distance = SDL_sqrtf((centers[i].first - centers[j].first) *
-// (centers[i].first - centers[j].first) +
-// (centers[i].second
-//- centers[j].second) * (centers[i].second - centers[j].second));
-//
-//					float nx, ny;
-//
-//					if (distance == 0) {
-//						distance = 0.1f;
-//						nx = 1.0f;
-//						ny = 0.0f;
-//					}
-//					else {
-//						nx = (centers[i].first -
-// centers[j].first) / distance;
-// ny = (centers[i].second - centers[j].second) / distance;
-//					}
-//
-//					float overlap = 0.5f * (distance -
-// radiuses[i] - radiuses[j]);
-//
-//					centers[i].first -= overlap * nx;
-//					centers[i].second -= overlap * ny;
-//
-//					centers[j].first += overlap * nx;
-//					centers[j].second += overlap * ny;
-//
-//					float tx = -ny;
-//					float ty = nx;
-//
-//					float dpTan1 = velocities[i].first * tx
-//+ velocities[i].second * ty; 					float dpTan2 =
-// velocities[j].first * tx + velocities[j].second * ty;
-//
-//					float dpNorm1 = velocities[i].first * nx
-//+ velocities[i].second * ny; 					float dpNorm2 =
-// velocities[j].first * nx + velocities[j].second * ny;
-//
-//					float m1 = (dpNorm1 * (radiuses[i]
-//* 10.f - radiuses[j] * 10.f) + 2.0f * radiuses[j] * 10.f * dpNorm2) /
-//(radiuses[i] * 10.f + radiuses[j] * 10.f);
-// float m2 = (dpNorm2 * (radiuses[j]
-//* 10.f - radiuses[i] * 10.f) + 2.0f * radiuses[i] * 10.f * dpNorm1) /
-//(radiuses[i] * 10.f + radiuses[j] * 10.f);
-//
-//					velocities[i].first = tx * dpTan1 + nx *
-// m1; 					velocities[i].second = ty * dpTan1 + ny
-// * m1; 					velocities[j].first = tx *
-// dpTan2 + nx * m2; 					velocities[j].second =
-// ty * dpTan2 + ny * m2;
-//				}
-//			}
-//		}
-//	}
-// }
-
-// std::array<int, 9> ComputeCirclePoints(vec2 center) {
-//	array.
-// }
-
 void InsertAsteroid(int grid[], int index, vec2f position, float radius) {
 	int x = position.x;
 	int y = position.y;
@@ -288,18 +286,19 @@ void InsertAsteroid(int grid[], int index, vec2f position, float radius) {
 			if (grid[posIndex] - posIndex - 1 >= 400) {
 				 std::cout << "UH OH";
 			} else {
-				int freePos = grid[posIndex];
+				int freePos = SDL_AddAtomicInt((SDL_AtomicInt*)&grid[posIndex], 1);
 				grid[freePos] = index;
-				grid[posIndex]++;
 			}
 		}
 	}
 }
 
 void UpdateGrid(int grid[], vec2f centers[], int index, float radiuses[]) {
+	#pragma omp parallel for
 	for (int i = 0; i < Constants::GRID_SIZE; i += Constants::CELL_SIZE)
 		grid[i] = i + 1;
 
+	#pragma omp parallel for
 	for (int i = 0; i < index; i++)
 		InsertAsteroid(grid, i, centers[i], radiuses[i]);
 }
@@ -418,11 +417,36 @@ int main(int argc, char* argv[]) {
 		// *********************************************************************************************
 
 		// HAND-WRITTEN PHYSICS
+		static int spawnedAsteroids = 0;
+		static int erasedAsteroids = 0;
+		static int counter = 0;
+		static int radius = 1;
+		static float color[3] = { 1,1,1 };
+
 		float* radiuses = new float[Constants::MAX_ASTEROIDS];
 		float* speeds = new float[Constants::MAX_ASTEROIDS];
 
 		vec2f* centers = new vec2f[Constants::MAX_ASTEROIDS];
 		vec2f* velocities = new vec2f[Constants::MAX_ASTEROIDS];
+
+		std::vector<vec2i> collisions;
+		collisions.reserve(Constants::MAX_ASTEROIDS * 4);
+
+		SDL_Vertex* vertices = new SDL_Vertex[Constants::MAX_ASTEROIDS * 4];
+		int* indices = new int[Constants::MAX_ASTEROIDS * 6];
+
+		#pragma omp parallel for
+		for (int i = 0; i < Constants::MAX_ASTEROIDS; i++) {
+			int indices_index = 6 * i;
+			int vertex_index = 4 * i;
+
+			indices[indices_index + 0] = vertex_index + 0;
+			indices[indices_index + 1] = vertex_index + 1;
+			indices[indices_index + 2] = vertex_index + 2;
+			indices[indices_index + 3] = vertex_index + 2;
+			indices[indices_index + 4] = vertex_index + 3;
+			indices[indices_index + 5] = vertex_index + 0;
+		}
 
 		int index = 0;
 
@@ -451,6 +475,29 @@ int main(int argc, char* argv[]) {
 		SDL_RenderClear(renderer);
 		SDL_RenderPresent(renderer);
 
+		SDL_Texture* circleTexture = SDL_CreateTexture(
+			renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 64, 64);
+
+		SDL_SetTextureBlendMode(circleTexture, SDL_BLENDMODE_BLEND);
+
+		SDL_SetRenderTarget(renderer, circleTexture);
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+		SDL_RenderClear(renderer);
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+		for (float w = 0; w <= 64; w++) {
+			for (float h = 0; h <= 64; h++) {
+				float dx = 32 - w;
+				float dy = 32 - h;
+				if ((dx * dx + dy * dy) <= 32 * 32) {
+					SDL_RenderPoint(renderer, w, h);
+				}
+			}
+		}
+
+		SDL_SetRenderTarget(renderer, nullptr);
+		SDL_SetTextureScaleMode(circleTexture, SDL_SCALEMODE_LINEAR);
+
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGuiIO io = ImGui::GetIO();
@@ -478,6 +525,7 @@ int main(int argc, char* argv[]) {
 		SDL_Event currentEvent;
 
 		while (running) {
+			collisions.clear();
 			Last = Current;
 			Current = SDL_GetPerformanceCounter();
 
@@ -498,16 +546,12 @@ int main(int argc, char* argv[]) {
 			ImGui::NewFrame();
 
 			{
-				static int spawnedAsteroids = 0;
-				static int erasedAsteroids = 0;
-				static int counter = 0;
-				static int radius = 1;
-
 				ImGui::Begin("Debug window");
 
 				ImGui::SliderInt("Radius", &radius, 1, 10);
 				ImGui::SliderInt("Asteroids", &spawnedAsteroids, 1, 100'000 - index);
 				ImGui::SliderInt("Erase Count", &erasedAsteroids, 1, index);
+				ImGui::ColorEdit3("Asteroids Color", color);
 
 				if (ImGui::Button("Spawn")) {
 					for (int i = 0; i < spawnedAsteroids; ++i) {
@@ -535,20 +579,46 @@ int main(int argc, char* argv[]) {
 
 			UpdateGrid(grid, centers, index, radiuses);
 
-			for (int i = 0; i < Constants::CELL_COUNT; i++)
-				ResolveCollision(grid, Constants::CELL_SIZE * i, centers, velocities,
-					radiuses);
+			#pragma omp parallel for
+			for (int i = 0; i < Constants::CELL_COUNT; i++) {
+				AddCollision(collisions, grid, Constants::CELL_SIZE * i, centers, radiuses);
+				//ResolveCollision(grid, Constants::CELL_SIZE * i, centers, velocities,
+					//radiuses);
+			}
+			
+			ResolveCollision(collisions, centers, radiuses, velocities);
 
 			SDL_RenderClear(renderer);
 			ImGui::Render();
 
+			#pragma omp parallel for
 			for (int i = 0; i < index; ++i) {
 				Move(centers[i], velocities[i], deltaTime);
 				BorderCollision(centers[i], velocities[i], radiuses[i]);
-				Draw(renderer, centers[i], radiuses[i]);
+				//Draw(renderer, centers[i], radiuses[i]);
 			}
 
-			SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+			#pragma omp parallel for
+			for (int i = 0; i < index; i++) {
+				float radius = radiuses[i];
+				float cx = centers[i].x;
+				float cy = centers[i].y;
+
+				int vertex_index = i * 4;
+				int indices_index = i * 6;
+
+				vertices[vertex_index + 0] = { {cx - radius, cy - radius}, {color[0], color[1], color[2], 1}, {0,0} };
+				vertices[vertex_index + 1] = { {cx + radius, cy - radius}, {color[0], color[1], color[2], 1}, {1,0} };
+				vertices[vertex_index + 2] = { {cx + radius, cy + radius}, {color[0], color[1], color[2], 1}, {1,1} };
+				vertices[vertex_index + 3] = { {cx - radius, cy + radius}, {color[0], color[1], color[2], 1}, {0,1} };
+			}
+
+
+			SDL_RenderGeometry(renderer, circleTexture, vertices, index * 4, indices, index * 6);
+
+			//for (int i = 0; i < index; ++i)
+
+			SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 			ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
 			SDL_RenderPresent(renderer);
 		}
