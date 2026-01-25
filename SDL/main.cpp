@@ -1,9 +1,7 @@
 #include <SDL3/SDL.h>
-#include <box2d/box2d.h>
-#include <box2d/collision.h>
+//#include <box2d/box2d.h>
+//#include <box2d/collision.h>
 
-#include <vector>
-#include <array>
 #include <iostream>
 #include <omp.h>
 
@@ -99,7 +97,7 @@ float rsqrt(float number) {
 	return y;
 }
 
-void AddCollision(std::vector<vec2i>& collisions, int grid[], int startPos, vec2f centers[], float radiuses[]) {
+void AddCollision(vec2i collisions[], int& col_nr, int grid[], int startPos, vec2f centers[], float radiuses[]) {
 	int lastIndex = grid[startPos];
 
 	for (int i = startPos + 1; i < lastIndex; i++) {
@@ -114,14 +112,17 @@ void AddCollision(std::vector<vec2i>& collisions, int grid[], int startPos, vec2
 					(radiuses[first_index] + radiuses[second_index]) *
 					(radiuses[first_index] + radiuses[second_index]))
 					#pragma omp critical
-					collisions.push_back({ first_index, second_index });
+					{
+					collisions[col_nr] = vec2i{ first_index, second_index };
+					col_nr++;
+					}
 			}
 		}
 	}
 }
 
-void ResolveCollision(std::vector<vec2i>& collisions, vec2f centers[], float radiuses[], vec2f velocities[]) {
-	for (int i = 0; i < collisions.size(); i++) {
+void ResolveCollision(vec2i collisions[], int col_nr, vec2f centers[], float radiuses[], vec2f velocities[]) {
+	for (int i = 0; i < col_nr; i++) {
 		int first_index = collisions[i].x;
 		int second_index = collisions[i].y;
 
@@ -261,7 +262,7 @@ void InsertAsteroid(int grid[], int index, vec2f position, float radius) {
 	int cellYMin = std::max((int)((y - radius) * invCell), 0);
 	int cellYMax = std::min((int)((y + radius) * invCell), Constants::MAX_CELL_Y);
 
-	std::array<vec2i, 9> gridPos = {
+	vec2i gridPos[9] = {
 		vec2i { cellX, cellY },
 		vec2i { cellX, cellYMax },
 		vec2i { cellX, cellYMin },
@@ -429,8 +430,7 @@ int main(int argc, char* argv[]) {
 		vec2f* centers = new vec2f[Constants::MAX_ASTEROIDS];
 		vec2f* velocities = new vec2f[Constants::MAX_ASTEROIDS];
 
-		std::vector<vec2i> collisions;
-		collisions.reserve(Constants::MAX_ASTEROIDS * 4);
+		vec2i* collisions = new vec2i[Constants::MAX_ASTEROIDS * 4];
 
 		SDL_Vertex* vertices = new SDL_Vertex[Constants::MAX_ASTEROIDS * 4];
 		int* indices = new int[Constants::MAX_ASTEROIDS * 6];
@@ -525,7 +525,8 @@ int main(int argc, char* argv[]) {
 		SDL_Event currentEvent;
 
 		while (running) {
-			collisions.clear();
+			int col_nr = 0;
+
 			Last = Current;
 			Current = SDL_GetPerformanceCounter();
 
@@ -581,12 +582,12 @@ int main(int argc, char* argv[]) {
 
 			#pragma omp parallel for
 			for (int i = 0; i < Constants::CELL_COUNT; i++) {
-				AddCollision(collisions, grid, Constants::CELL_SIZE * i, centers, radiuses);
+				AddCollision(collisions, col_nr, grid, Constants::CELL_SIZE * i, centers, radiuses);
 				//ResolveCollision(grid, Constants::CELL_SIZE * i, centers, velocities,
 					//radiuses);
 			}
 			
-			ResolveCollision(collisions, centers, radiuses, velocities);
+			ResolveCollision(collisions, col_nr, centers, radiuses, velocities);
 
 			SDL_RenderClear(renderer);
 			ImGui::Render();
